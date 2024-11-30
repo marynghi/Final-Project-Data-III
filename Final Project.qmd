@@ -1,0 +1,139 @@
+---
+title: "Final Project"
+
+toc: false
+number-sections: true
+
+format:
+  docx:
+    reference-doc: "./assets/sse-quarto-template.docx"
+
+bibliography: assets/references.bib
+csl: assets/apa-6th-edition.csl
+
+editor: visual
+---
+
+```{r}
+pckgs <- c("ggplot2", "ggfortify", "zoo", "forecast",
+           "dynlm", "sandwich", "lmtest", "tseries",
+           "plm", "plotly","rio")
+
+pckgs <- pckgs[!pckgs %in% installed.packages()]
+
+install.packages(pckgs,
+                 dependencies = TRUE,
+                 type = "binary")
+```
+
+```{r}
+df <- rio::import("/Users/ThaoNghi/Documents/Data III/Final project/BE603_gr_6.xlsx")
+```
+
+# Hypotheses
+
+We define the level of success as the degree to which the collected fund fulfill the initial goal:
+
+```{r}
+df$success_lv <- df$collected_funds/df$goal
+```
+
+*H1. There is a **positive and significant relationship** between **the success level of crowd-funding projects and the number of comments,** such that projects with higher comments count has higher level of success.*
+
+*H2. Goal of fund is moderating the relationship between the success level of crowd-funding projects and the number of comments such that projects with higher goals often has higher level of success given the same comment counts.*
+
+## General regression
+
+```{r}
+model_OLS <- lm(success_lv~
+                + campaign_quality
+                + goal
+                + images
+                + video
+                + comments_count
+                + updates_count
+                + creators
+                + business_venture
+                + social
+                + pitch_size
+                + filler_words
+                + duration
+                + reach30in2
+                + posemo
+                + negemo
+                + time,
+                data = df)
+summary(model_OLS)
+```
+
+```{r}
+model_OLS_2 <- lm(success_lv~
++ goal
++ comments_count
++ pitch_size
++ reach30in2
++ posemo
++ time,
+data = df)
+summary(model_OLS_2)
+```
+
+## Moderating effect - comments_count:goal
+
+```{r}
+# Standardize varaibles
+df$success_lv <- as.numeric(scale(as.numeric(df$success_lv)))
+df$goal <- as.numeric(scale(as.numeric(df$goal)))
+df$comments_count <- as.numeric(as.numeric(scale(df$comments_count)))
+# Run the model
+model_1 <- lm(success_lv ~ comments_count * goal, data = df)
+# Display results
+summary(model_1)
+```
+
+```{r}
+quantiles <- quantile(df$goal, c(0.33, 0.67))
+quantiles
+low <- mean(df$goal[df$goal < -0.64])
+medium <- mean(df$goal[df$goal >= -0.64 & df$goal < 0.16])
+high <- mean(df$goal[df$goal>= 0.16])
+df_prediction <- data.frame(goal = c(low, low, medium, medium, high, high),
+comments_count = c(mean(df$comments_count),
+                   mean(df$comments_count) + 1,
+                   mean(df$comments_count),
+                   mean(df$comments_count) + 1,
+                   mean(df$comments_count),
+                   mean(df$comments_count) + 1))
+predictions <- predict(model_1, df_prediction, type = "response")
+predictions
+```
+
+```{r}
+# With point display
+library(ggplot2)
+df$goal <- "2 medium"  # Default
+df$goal[df$goal < quantiles[1]] <- "1 low"
+df$goal[df$goal > quantiles[2]] <- "3 high"
+df$goal <- factor(df$goal, levels = c("1 low", "2 medium", "3 high"))
+
+ggplot(df) +
+aes(y = success_lv, x = comments_count, color = as.factor(goal)) +
+geom_smooth(method = "lm", se = FALSE) +
+labs(y = "success_lv",
+x = "comments_count",
+color = "goal") + theme_classic()
+```
+
+## Moderating effect - reach30in2:goal
+
+```{r}
+df2 <- rio::import("/Users/ThaoNghi/Documents/Data III/Final project/BE603_gr_6.xlsx")
+df2$success_lv <- df2$collected_funds/df2$goal
+```
+
+```{r}
+# Run the model
+model_2 <- lm(success_lv ~ reach30in2 * goal, data = df2)
+# Display results
+summary(model_2)
+```
