@@ -90,7 +90,7 @@ model_1 <- lm(success_lv ~ comments_count * goal, data = df)
 # Display results
 summary(model_1)
 ```
-
+I think for the code below, we need to divide by sd(df$comments_count) to get the incremental effect
 ```{r}
 quantiles <- quantile(df$goal, c(0.33, 0.67))
 quantiles
@@ -99,7 +99,7 @@ medium <- mean(df$goal[df$goal >= -0.64 & df$goal < 0.16])
 high <- mean(df$goal[df$goal>= 0.16])
 df_prediction <- data.frame(goal = c(low, low, medium, medium, high, high),
 comments_count = c(mean(df$comments_count),
-                   mean(df$comments_count) + 1,
+                   mean(df$comments_count) + 1/sd(df$comments_count),
                    mean(df$comments_count),
                    mean(df$comments_count) + 1,
                    mean(df$comments_count),
@@ -107,7 +107,8 @@ comments_count = c(mean(df$comments_count),
 predictions <- predict(model_1, df_prediction, type = "response")
 predictions
 ```
-
+Then we'll see that the one unit increase in low and medium goals will lead to positive impact on the success level. But one unit increase in high goal will have counter-effect
+(thats what i wrote from the seminar)
 ```{r}
 # With point display
 library(ggplot2)
@@ -122,6 +123,35 @@ geom_smooth(method = "lm", se = FALSE) +
 labs(y = "success_lv",
 x = "comments_count",
 color = "goal") + theme_classic()
+```
+the graph does not work, maybe try this one. But this one suggests that ther is NO MODERATING EFFECT
+```
+{r}
+library(ggplot2)
+
+# Create a new column for labeling goal levels
+df_prediction$goal_level <- factor(
+  df_prediction$goal_std, 
+  labels = c("Low Goal", "Medium Goal", "High Goal")
+)
+
+# Plot the interaction
+ggplot(df_prediction, aes(x = comments_count_std, y = predictions, color = goal_level)) +
+  geom_line(size = 1) +  # Add lines for each goal level
+  geom_point(size = 2) +  # Add points for clarity
+  labs(
+    title = "Interaction Plot",
+    x = "Comments (Standardized)",
+    y = "Predicted Success Level (Standardized)",
+    color = "Goal Level"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
 ```
 
 ## Moderating effect - reach30in2:goal
