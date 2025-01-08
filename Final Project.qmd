@@ -1,5 +1,6 @@
 ---
 title: "Final Project"
+subtitle: "Thao Nghi Le Thai 26041, Bao Nhi Tang 26004"
 
 toc: false
 number-sections: true
@@ -14,156 +15,208 @@ csl: assets/apa-6th-edition.csl
 editor: visual
 ---
 
-```{r}
+{r}
 pckgs <- c("ggplot2", "ggfortify", "zoo", "forecast",
            "dynlm", "sandwich", "lmtest", "tseries",
-           "plm", "plotly","rio")
+           "plm", "plotly","rio","stargazer", "moments", 
+           "corrplot", "broom", "dplyr", "tidyr",
+           "purrr", "ggcorrplot", "kableExtra", "knitr")
 
 pckgs <- pckgs[!pckgs %in% installed.packages()]
 
 install.packages(pckgs,
                  dependencies = TRUE,
                  type = "binary")
-```
 
-```{r}
+{r}
 df <- rio::import("/Users/ThaoNghi/Documents/Data III/Final project/BE603_gr_6.xlsx")
-```
 
-# Hypotheses
+Hypothesis
 
-We define the level of success as the degree to which the collected fund fulfill the initial goal:
+H1. There is a positive and significant relationship between the collected funds of crowd-funding projects and the number of comments, such that projects with higher comments count has higher collected funds
 
-```{r}
-df$success_lv <- df$collected_funds/df$goal
-```
+H2. The goal level has a moderating effect on the relationship between the collected funds of crowd-funding projects and the comments count of the project such that the effect of comments count on collected fund is larger for projects with higher goal.
 
-*H1. There is a **positive and significant relationship** between **the success level of crowd-funding projects and the number of comments,** such that projects with higher comments count has higher level of success.*
+Data summary
 
-*H2. Goal of fund is moderating the relationship between the success level of crowd-funding projects and the number of comments such that projects with higher goals often has higher level of success given the same comment counts.*
+{r}
+vtable::st(df,
+           vars = c("collected_funds", "goal", "comments_count"),
+           
+           labels = c("collected_funds", "goal", "comments_count"),
+           
+           summ = c("notNA(x)","mean(x)", "sd(x)", "min(x)", "max(x)"),
+           
+           summ.names = c("Nr.Observation","Mean", "S.D.", "Min", "Max"),
+           
+           digits = 3,
+           
+           out = "kable"
+)
 
-## General regression
+{r}
+library(corrplot)
+cor_matrix <- cor(df)
+corrplot(cor_matrix, method = c("circle"), type = "upper", tl.cex = 0.8)
+print(cor_matrix)
 
-```{r}
-model_OLS <- lm(success_lv~
-                + campaign_quality
-                + goal
-                + images
-                + video
-                + comments_count
-                + updates_count
-                + creators
-                + business_venture
-                + social
-                + pitch_size
-                + filler_words
-                + duration
-                + reach30in2
-                + posemo
-                + negemo
-                + time,
-                data = df)
-summary(model_OLS)
-```
+Hypothesis 1
 
-```{r}
-model_OLS_2 <- lm(success_lv~
-+ goal
-+ comments_count
-+ pitch_size
-+ reach30in2
-+ posemo
-+ time,
-data = df)
-summary(model_OLS_2)
-```
+{r}
+model_OLS_1 <- lm(collected_funds ~ comments_count + campaign_quality + pitch_size, data = df)
+summary(model_OLS_1)
 
-## Moderating effect - comments_count:goal
+Hypothesis 2
 
-```{r}
-# Standardize varaibles
-df$success_lv <- as.numeric(scale(as.numeric(df$success_lv)))
-df$goal <- as.numeric(scale(as.numeric(df$goal)))
-df$comments_count <- as.numeric(as.numeric(scale(df$comments_count)))
-# Run the model
-model_1 <- lm(success_lv ~ comments_count * goal, data = df)
-# Display results
-summary(model_1)
-```
-I think for the code below, we need to divide by sd(df$comments_count) to get the incremental effect
-```{r}
-quantiles <- quantile(df$goal, c(0.33, 0.67))
-quantiles
-low <- mean(df$goal[df$goal < -0.64])
-medium <- mean(df$goal[df$goal >= -0.64 & df$goal < 0.16])
-high <- mean(df$goal[df$goal>= 0.16])
-df_prediction <- data.frame(goal = c(low, low, medium, medium, high, high),
-comments_count = c(mean(df$comments_count),
-                   mean(df$comments_count) + 1/sd(df$comments_count),
-                   mean(df$comments_count),
-                   mean(df$comments_count) + 1,
-                   mean(df$comments_count),
-                   mean(df$comments_count) + 1))
-predictions <- predict(model_1, df_prediction, type = "response")
-predictions
-```
-Then we'll see that the one unit increase in low and medium goals will lead to positive impact on the success level. But one unit increase in high goal will have counter-effect
-(thats what i wrote from the seminar)
-```{r}
-# With point display
-library(ggplot2)
-df$goal <- "2 medium"  # Default
-df$goal[df$goal < quantiles[1]] <- "1 low"
-df$goal[df$goal > quantiles[2]] <- "3 high"
-df$goal <- factor(df$goal, levels = c("1 low", "2 medium", "3 high"))
+Goal category approach
 
-ggplot(df) +
-aes(y = success_lv, x = comments_count, color = as.factor(goal)) +
-geom_smooth(method = "lm", se = FALSE) +
-labs(y = "success_lv",
-x = "comments_count",
-color = "goal") + theme_classic()
-```
-the graph does not work, maybe try this one. But this one suggests that ther is NO MODERATING EFFECT
-```
+{r}
+df$goal_category <- cut(
+  df$goal,
+  breaks = quantile(df$goal, probs = c(0, 0.25, 0.5, 0.75, 1)),
+  labels = c("< 25%", "25%-50%", "50%-75%", "> 75%"),
+  include.lowest = TRUE
+)
+print(quantile(df$goal, probs = c(0, 0.25, 0.5, 0.75,1)))
+
+{r}
+model_low <- lm(collected_funds ~ comments_count, data = subset(df, goal_category == "< 25%"))
+model_midlow <- lm(collected_funds ~ comments_count, data = subset(df, goal_category == "25%-50%"))
+model_midhigh <- lm(collected_funds ~ comments_count, data = subset(df, goal_category == "50%-75%"))
+model_high <- lm(collected_funds ~ comments_count, data = subset(df, goal_category == "> 75%"))
+
+{r}
+library(stargazer)
+stargazer(model_low, model_midlow, model_midhigh, model_high,
+          type = "text",              # Output type: text, latex, html, etc.
+          title = "Segmented Regression Results",
+          column.labels = c("< 25%", "25%-50%", "50%-75%", "> 75%"),
+          dep.var.labels = "Collected Funds",
+          out = "segmented_regression_results.txt")  # Save output to a file
+
 {r}
 library(ggplot2)
 
-# Create a new column for labeling goal levels
-df_prediction$goal_level <- factor(
-  df_prediction$goal_std, 
-  labels = c("Low Goal", "Medium Goal", "High Goal")
-)
-
-# Plot the interaction
-ggplot(df_prediction, aes(x = comments_count_std, y = predictions, color = goal_level)) +
-  geom_line(size = 1) +  # Add lines for each goal level
-  geom_point(size = 2) +  # Add points for clarity
+ggplot(df, aes(x = comments_count, y = collected_funds, color = goal_category)) +
+  geom_smooth(method = "lm", se = FALSE, size = 1) +  # Add regression lines
   labs(
-    title = "Interaction Plot",
-    x = "Comments (Standardized)",
-    y = "Predicted Success Level (Standardized)",
-    color = "Goal Level"
+    title = "Collected Funds vs Comments Count",
+    x = "Comments Count",
+    y = "Collected Funds",
+    color = "Goal Category"
   ) +
   theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 16),
-    axis.title = element_text(size = 12),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 10)
-  )
-```
+  theme(legend.position = "top")
 
-## Moderating effect - reach30in2:goal
+As goal increases, the explanatory power of comments_count on collected funds also increases. This is because the larger the project's goal is, the more comments_count, which is indicative of engagement, matters.
 
-```{r}
-df2 <- rio::import("/Users/ThaoNghi/Documents/Data III/Final project/BE603_gr_6.xlsx")
-df2$success_lv <- df2$collected_funds/df2$goal
-```
+All data moderating model approach
 
-```{r}
+{r}
+# Standardize varaibles
+df$collected_funds_std <- as.numeric(scale(df$collected_funds))
+df$comments_count_std <- as.numeric(scale(df$comments_count))
+df$goal_std <- as.numeric(scale(df$goal))
+
 # Run the model
-model_2 <- lm(success_lv ~ reach30in2 * goal, data = df2)
+model_OLS_2 <- lm(collected_funds_std ~ comments_count_std * goal_std, data = df)
+
 # Display results
-summary(model_2)
-```
+summary(model_OLS_2)
+
+The interaction term is not significant here. However, after cleaning outliers, it becomes significant:
+
+Outliers cleaning
+
+{r}
+olsrr::ols_plot_cooksd_chart(model_OLS_2)
+# The Cook's distance is used
+
+{r}
+df$cooks <- cooks.distance(model_OLS_2)
+
+fit_1_outliers <- df$cooks[df$cooks > 3*mean(df$cooks)]
+print("The number of potential outliers in model OLS (Cook's distance > 3*mean)")
+length(fit_1_outliers) 
+
+All data model refit
+
+{r}
+outlier_indices <- which(df$cooks > 3 * mean(df$cooks))
+
+# Print the indices and number of outliers
+print(paste("Outlier indices:", paste(outlier_indices, collapse = ", ")))
+print(paste("Number of outliers:", length(outlier_indices)))
+
+# Remove outliers
+df_clean <- df[-outlier_indices, ]
+
+# Refit the model
+model_OLS_clean <- lm(collected_funds_std ~ comments_count_std*goal_std, data = df_clean)  # Replace with your actual formula
+
+# Summary of the new model
+summary(model_OLS_clean)
+
+`Assumption checks
+
+{r}
+library(ggplot2)
+ggplot(df_clean) + 
+  aes(x = comments_count_std, y = collected_funds_std) + 
+  geom_point(shape = 4) + 
+  geom_smooth(method = "lm", formula = "y ~ x", se = FALSE) +
+  labs(x = "comments_count", y = "collected_funds") + theme_classic()
+
+Normality of error terms
+
+{r}
+library(ggplot2)
+df_clean$residuals <- model_OLS_clean$residuals
+# The residuals are taken from our estimated model Y
+
+ggplot(df_clean) + aes(x = residuals) +
+  geom_histogram() +
+  labs(x = "Residuals") + theme_classic()
+
+{r}
+library(ggplot2)
+df$residuals <- model_OLS_1$residuals
+# The residuals are taken from our estimated model Y
+
+ggplot(df) + aes(x = residuals) +
+  geom_histogram() +
+  labs(x = "Residuals") + theme_classic()
+
+{r}
+moments::skewness(df_clean$resid)
+
+moments::kurtosis(df_clean$resid)
+
+moments::jarque.test(df_clean$resid)
+
+Heteroskedasticity
+
+{r}
+#Breush-pagan test
+lmtest::bptest(collected_funds ~ comments_count*goal, data = df_clean, studentize = FALSE)
+
+{r}
+#Breush-pagan test
+lmtest::bptest(collected_funds ~ comments_count + pitch_size + campaign_quality, data = df_clean, studentize = FALSE)
+
+{r}
+library(ggplot2)
+df_clean$abs_residuals <- abs(df_clean$residuals)
+ggplot(data = df_clean) + aes(x = collected_funds, y = abs_residuals) +
+  geom_point(shape = 4) + geom_abline(slope = 0) +
+  labs(x = "Collected funds",
+       y = "Residuals (absolute values)") + theme_classic()
+
+Multicollinearity
+
+{r}
+regclass::VIF(model_OLS_clean)
+
+{r}
+regclass::VIF(model_OLS_1)
+
