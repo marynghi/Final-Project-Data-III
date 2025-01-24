@@ -37,10 +37,9 @@ The study is grounded in **Signaling Theory**, which suggests that certain campa
 
 ## Files in the Repository
 
-- `analysis_code.py`: R code for data cleaning, regression analysis, and visualization.
-- `data.csv`: Sample dataset (sanitized version for privacy).
-- `results.pdf`: Detailed results and visualizations from the analysis.
-- `presentation.pptx`: Summary of findings.
+- `analysis_code.qmd`: R code for data cleaning, regression analysis, and visualization.
+- `data.xlsx`: Sample dataset (sanitized version for privacy).
+- `presentation.pdf`: Summary of findings.
 
 ## Key Takeaways for Practitioners
 
